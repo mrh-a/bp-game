@@ -1,39 +1,42 @@
 package model;
 
+import enums.Status;
+
 import java.util.ArrayList;
 
 public class Ship {
     private int size;
     private String name;
-    private ArrayList<ShipStatus> shipStatus;
+    private ArrayList<MapCell> cells;
 
-    void Ship(int size, String name, ArrayList<ShipStatus> shipStatus) {
+    public Ship(int size, String name) {
         this.size = size;
         this.name = name;
-        this.shipStatus = shipStatus;
+        this.cells = new ArrayList<>();
     }
 
     public int getSize() {
         return size;
     }
 
-    public void setSize(int size) {
-        this.size = size;
-    }
-
     public String getName() {
         return name;
     }
 
-    public void setName(String name) {
-        this.name = name;
+    public ArrayList<MapCell> getCells() {
+        return cells;
     }
 
-    public ArrayList<ShipStatus> getShipStatus() {
-        return shipStatus;
+    public void addCell(MapCell cell) {
+        cells.add(cell);
     }
 
-    public void setShipStatus(ArrayList<ShipStatus> shipStatus) {
-        this.shipStatus = shipStatus;
+    public boolean isSunk() {
+        for (MapCell cell : cells) {
+            if (cell.getStatus() != Status.H) {
+                return false;
+            }
+        }
+        return true;
     }
 }
