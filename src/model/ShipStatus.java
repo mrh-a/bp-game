@@ -1,6 +1,8 @@
 package model;
 
-public class ShipStatus {
+import java.io.Serializable;
+
+public class ShipStatus implements Serializable {
     private int position;
     private boolean isSinked;
 

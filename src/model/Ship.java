@@ -2,9 +2,10 @@ package model;
 
 import enums.Status;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 
-public class Ship {
+public class Ship implements Serializable {
     private int size;
     private String name;
     private ArrayList<MapCell> cells;

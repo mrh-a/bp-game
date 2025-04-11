@@ -2,13 +2,15 @@ package model;
 
 import enums.Status;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 
-public class PlayerMap {
+public class PlayerMap implements Serializable {
+    private static final long serialVersionUID = 1L;
+
     private ArrayList<MapCell> mapCells;
 
     public PlayerMap() {
-
     }
 
     public ArrayList<MapCell> getMapCells() {
@@ -32,7 +34,6 @@ public class PlayerMap {
         boolean isHorizontal = startX == endX;
         boolean isVertical = startY == endY;
 
-        // Validate direction and size
         if (!isHorizontal && !isVertical) {
             return false; // Must be horizontal or vertical
         }
@@ -41,18 +42,15 @@ public class PlayerMap {
             return false; // Distance between start and end must match ship size
         }
 
-        // Determine direction and bounds
         int minX = Math.min(startX, endX);
         int minY = Math.min(startY, endY);
         int maxX = Math.max(startX, endX);
         int maxY = Math.max(startY, endY);
 
-        // Check bounds
         if (minX < 0 || maxX >= Game.MAP_HEIGHT || minY < 0 || maxY >= Game.MAP_WIDTH) {
             return false; // Out of bounds
         }
 
-        // Check for overlap
         for (int i = 0; i < size; i++) {
             int x = isHorizontal ? startX : minX + i;
             int y = isHorizontal ? minY + i : startY;
@@ -62,13 +60,11 @@ public class PlayerMap {
             }
         }
 
-        // Place the ship
         for (int i = 0; i < size; i++) {
             int x = isHorizontal ? startX : minX + i;
             int y = isHorizontal ? minY + i : startY;
             MapCell cell = getCellAt(x, y);
             cell.setStatus(Status.S);
-            System.out.println(cell.getPosition().getX() + " " + cell.getPosition().getY());
             ship.addCell(cell);
         }
         return true;

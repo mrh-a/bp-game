@@ -69,6 +69,17 @@ public class StartForm extends JFrame {
             JOptionPane.showMessageDialog(this,
                     "Have fun!");
         });
+
+        loadButton.addActionListener(e -> {
+            Game loadedGame = Game.loadGame();
+            if (loadedGame != null) {
+                new GameUI(loadedGame);
+                dispose();
+                JOptionPane.showMessageDialog(this, "Game loaded successfully!");
+            } else {
+                JOptionPane.showMessageDialog(this, "No saved game found!");
+            }
+        });
     }
 
 }

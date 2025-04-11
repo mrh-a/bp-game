@@ -5,17 +5,22 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
+import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
 
 import static enums.Status.*;
 
-public class GameUI extends JFrame {
+public class GameUI extends JFrame implements Serializable {
     private Game game;
     private JLabel instructionLabel;
     private JLabel turnLabel;
     private Map<Position, MapCellButton> player1Buttons = new HashMap<>();
     private Map<Position, MapCellButton> player2Buttons = new HashMap<>();
+
+    // These fields track the ship-placement progress.
     private Player currentPlacingPlayer;
     private int currentShipIndex;
     private Position startPosition;
@@ -61,8 +66,25 @@ public class GameUI extends JFrame {
         setLocationRelativeTo(null);
         setVisible(true);
 
-        // Start the ship placement phase
-        setupShipPlacement();
+        // When loading the game, resume from ship placement progress if not yet in playing phase.
+        if (game.isInPlayingPhase()) {
+            startGamePhase();
+        } else {
+            // If the game is in ship placement phase, resume where it left off
+            currentPlacingPlayer = game.getCurrentPlayer();
+            currentShipIndex = game.getCurrentShipIndex();
+            setupShipPlacement();
+        }
+
+        updateButtonColors();
+
+        // Save game state on window close
+        addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent e) {
+                Game.saveGame(game); // Save the game state when the window is closing
+            }
+        });
     }
 
     private JPanel createMapPanel(PlayerMap playerMap, Map<Position, MapCellButton> buttonMap) {
@@ -90,12 +112,18 @@ public class GameUI extends JFrame {
         return wrapperPanel;
     }
 
+    // Resume the ship placement phase from saved state.
     private void setupShipPlacement() {
-        currentPlacingPlayer = game.getPlayer1();
-        currentShipIndex = 0;
+        currentPlacingPlayer = game.getCurrentPlayer();
+        currentShipIndex = game.getCurrentShipIndex();
         startPosition = null;
         endPosition = null;
         displayInstruction();
+    }
+
+    // When the game is already in the playing phase, adjust the UI accordingly.
+    private void startGamePhase() {
+        instructionLabel.setText("Game is now in progress!");
     }
 
     private void displayInstruction() {
@@ -108,7 +136,7 @@ public class GameUI extends JFrame {
         }
     }
 
-    // Custom button class to store position and map reference
+    // Custom button class to store position and map reference.
     class MapCellButton extends JButton {
         private Position position;
         private PlayerMap map;
@@ -136,38 +164,40 @@ public class GameUI extends JFrame {
             PlayerMap clickedMap = button.getMap();
             String clickedStatus = button.getText();
 
-            if(game.isInPlayingPhase()){
-                handleGamePhase(currentPlacingPlayer, clickedMap,clickedStatus, button);
-            }
-            // Ensure the click is on the correct player's map
-            else if (clickedMap == getCurrentPlayerMap()) {
+            if (game.isInPlayingPhase()) {
+                handleGamePhase(currentPlacingPlayer, clickedMap, clickedStatus, button);
+            } else if (clickedMap == getCurrentPlayerMap()) {
                 handleShipPlacement(button, clickedPos);
             }
 
             if (game.isInPlayingPhase()) {
                 checkForWinner();
             }
-
         }
 
-        private void handleGamePhase(Player currentPlayer, PlayerMap clickedMap, String clickedStatus, MapCellButton button){
-            System.out.println("--current palyer--" +  currentPlayer.getName());
-            if(clickedMap == getOtherPlayerMap()){
-                Status status;
-                status = Status.valueOf(clickedStatus);
-                switch (status){
-                    case S:
-                        button.setText(H.toString());
+        private void handleGamePhase(Player currentPlayer, PlayerMap clickedMap, String clickedStatus, MapCellButton button) {
+            // Check if the clicked map is the other player's map
+            if (clickedMap == getOtherPlayerMap()) {
+                Status status = Status.valueOf(clickedStatus);
+
+                // Perform actions based on the current cell's status
+                switch (status) {
+                    case S:  // Ship cell
+                        button.setText(H.toString()); // Mark it as hit
+                        button.setBackground(Color.RED); // Optionally change background color for better visual feedback
+                        updateCellStatus(clickedMap, button.getPosition(), Status.H);  // Update the actual map cell status
                         break;
-                    case H:
+
+                    case H: // Already hit
+                    case M: // Already missed
                         JOptionPane.showMessageDialog(GameUI.this, "You already selected this cell!");
                         break;
-                    case M:
-                        JOptionPane.showMessageDialog(GameUI.this, "You already selected this cell!");
-                        break;
-                    case W:
-                        button.setText(M.toString());
-                        switchCurrentPlayer();
+
+                    case W: // Water cell
+                        button.setText(M.toString()); // Mark it as a miss
+                        button.setBackground(Color.BLUE); // Optionally change background color for better visual feedback
+                        updateCellStatus(clickedMap, button.getPosition(), Status.M);  // Update the actual map cell status
+                        switchCurrentPlayer(); // Switch to the next player
                         break;
                 }
             }
@@ -182,13 +212,9 @@ public class GameUI extends JFrame {
         }
 
         private void switchCurrentPlayer() {
-            if(currentPlacingPlayer == game.getPlayer1()) {
-                currentPlacingPlayer = game.getPlayer2();
-                turnLabel.setText("Current Turn: " + currentPlacingPlayer.getName());
-            }else {
-                currentPlacingPlayer = game.getPlayer1();
-                turnLabel.setText("Current Turn: " + currentPlacingPlayer.getName());
-            }
+            game.toggleTurn();
+            currentPlacingPlayer = game.getCurrentPlayer();
+            turnLabel.setText("Current Turn: " + currentPlacingPlayer.getName());
         }
 
         private void handleShipPlacement(MapCellButton button, Position clickedPos) {
@@ -223,9 +249,20 @@ public class GameUI extends JFrame {
                 Position pos = cell.getPosition();
                 MapCellButton shipButton = buttonMap.get(pos);
                 if (shipButton != null) {
-                    shipButton.setText("S");
-                    shipButton.setBackground(null);
+                    shipButton.setText("S"); // Ship cells are marked with "S"
+                    shipButton.setBackground(Color.GRAY); // Optionally change background color for better visual feedback
+                    updateCellStatus(getCurrentPlayerMap(), pos, Status.S); // Update the map cell status to S (Ship)
                 }
+            }
+        }
+
+        private void updateCellStatus(PlayerMap playerMap, Position position, Status newStatus) {
+            // Retrieve the map cell at the given position
+            MapCell cell = playerMap.getCellAt(position.getX(), position.getY());
+
+            if (cell != null) {
+                // Update the cell's status with the new status (H or M)
+                cell.setStatus(newStatus);
             }
         }
 
@@ -235,10 +272,13 @@ public class GameUI extends JFrame {
                 if (currentPlacingPlayer == game.getPlayer1()) {
                     switchCurrentPlayer();
                     currentShipIndex = 0;
+                    game.setCurrentShipIndex(0); // Update saved state
                 } else {
-                    game.setInPlayingPhase(true);
+                    game.setInPlayingPhase(true); // Switch to playing phase
                     switchCurrentPlayer();
                 }
+            } else {
+                game.setCurrentShipIndex(currentShipIndex); // Update saved state
             }
             displayInstruction();
             startPosition = null;
@@ -255,42 +295,36 @@ public class GameUI extends JFrame {
             return (currentPlacingPlayer == game.getPlayer1()) ? player1Buttons : player2Buttons;
         }
 
-
         // New method to check for a winner
         private void checkForWinner() {
             boolean player1Lost = true;
             boolean player2Lost = true;
 
-            // Check if all of Player 1's ships are hit
             for (MapCellButton button : player1Buttons.values()) {
                 if (button.getText().equals(S.toString())) {
-                    player1Lost = false; // Found an unhit ship cell
+                    player1Lost = false;
                     break;
                 }
             }
 
-            // Check if all of Player 2's ships are hit
             for (MapCellButton button : player2Buttons.values()) {
                 if (button.getText().equals(S.toString())) {
-                    player2Lost = false; // Found an unhit ship cell
+                    player2Lost = false;
                     break;
                 }
             }
 
-            // Determine the winner
             if (player1Lost && !player2Lost) {
-                JOptionPane.showMessageDialog(GameUI.this, game.getPlayer2().getName() + " winner," + " All of " +
-                        game.getPlayer1().getName() + " ships sunk.");
+                JOptionPane.showMessageDialog(GameUI.this, game.getPlayer2().getName() + " wins! All of " +
+                        game.getPlayer1().getName() + "'s ships are sunk.");
                 disableAllButtons(); // End the game
             } else if (player2Lost && !player1Lost) {
-                JOptionPane.showMessageDialog(GameUI.this, game.getPlayer1().getName() + " winner," + " All of " +
-                        game.getPlayer2().getName() + " ships sunk.");
+                JOptionPane.showMessageDialog(GameUI.this, game.getPlayer1().getName() + " wins! All of " +
+                        game.getPlayer2().getName() + "'s ships are sunk.");
                 disableAllButtons(); // End the game
             }
-            // If both are true or both are false, the game continues
         }
 
-        // Helper method to disable all buttons when the game ends
         private void disableAllButtons() {
             for (MapCellButton button : player1Buttons.values()) {
                 button.setEnabled(false);
@@ -302,4 +336,38 @@ public class GameUI extends JFrame {
 
     }
 
+    private void updateButtonColors() {
+        // Iterate through each button for both players and update its background color
+        for (Map.Entry<Position, MapCellButton> entry : player1Buttons.entrySet()) {
+            MapCellButton button = entry.getValue();
+            Position position = button.getPosition();
+            MapCell cell = game.getPlayerMap1().getCellAt(position.getX(), position.getY());
+            updateButtonColor(button, cell.getStatus());
+        }
+
+        for (Map.Entry<Position, MapCellButton> entry : player2Buttons.entrySet()) {
+            MapCellButton button = entry.getValue();
+            Position position = button.getPosition();
+            MapCell cell = game.getPlayerMap2().getCellAt(position.getX(), position.getY());
+            updateButtonColor(button, cell.getStatus());
+        }
+    }
+
+    private void updateButtonColor(MapCellButton button, Status status) {
+        // Update the button background color based on the status of the MapCell
+        switch (status) {
+            case S:  // Ship
+                button.setBackground(Color.GRAY);  // Set background for ship cells (optional)
+                break;
+            case H:  // Hit
+                button.setBackground(Color.RED);   // Set background for hit cells
+                break;
+            case M:  // Miss
+                button.setBackground(Color.BLUE);  // Set background for miss cells
+                break;
+            case W:  // Water
+                button.setBackground(null);        // Set background for water cells (no color)
+                break;
+        }
+    }
 }

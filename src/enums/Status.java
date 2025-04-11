@@ -1,5 +1,7 @@
 package enums;
 
-public enum Status {
-    S, H, M, W;
+import java.io.Serializable;
+
+public enum Status implements Serializable {
+    S, H, M, W;  // Ship, Hit, Miss, Water
 }
